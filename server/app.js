@@ -9,8 +9,10 @@ const MongoStore = require("connect-mongo");
 const expressValidator = require("express-validator");
 const passport = require("passport");
 const compression = require("compression");
+const http = require('http');
+const server = http.createServer(app);
 // to clear the console after modifications
-process.stdout.write("\u001b[2J\u001b[0;0H");
+// process.stdout.write("\u001b[2J\u001b[0;0H");
 /* Loads all variables from .env file to "process.env" */
 require("dotenv").config();
 /* Require our models here so we can use the mongoose.model() singleton to reference our models across our app */
@@ -111,4 +113,7 @@ app.use(function(err, req, res, next) {
   res.status(status).json(message);
 });
  */
-module.exports = app;
+app.set('port', process.env.PORT || 3000)
+server.listen(app.get('port'), () => {
+  console.log(`http server is listening on port ${app.get('port')}`);
+})
