@@ -1,7 +1,6 @@
 const mongoose = require("mongoose");
 const User = mongoose.model("User");
-const passport = require("passport");
-
+const jwt = require('jsonwebtoken');
 exports.validateSignup = (req, res, next) => {
   req.sanitizeBody("name");
   req.sanitizeBody("email");
@@ -38,48 +37,131 @@ exports.validateSignup = (req, res, next) => {
 
 exports.signup = async (req, res) => {
   const { name, email, password } = req.body;
-  const user = await new User({ name, email, password });
-  User.register(user, password, (err, user) => {
-    if (err) {
-      return res.status(500).send(err.message);
-    }
-    res.json(user.name);
-  });
+  User.create({ name, email, password })
+    .then(user => {
+      res.json(user.name);
+    })
+    .catch(err => {
+      const errors = handleErrors(err);
+      res.status(400).json({ errors });
+    })
 };
 
 exports.signin = (req, res, next) => {
-  passport.authenticate("local", (err, user, info) => {
-    if (err) {
-      return res.status(500).json(err.message);
-    }
+  const { email, password } = req.body;
+  User.findOne({ email: email })
+  .then(user => {
     if (!user) {
-      return res.status(400).json(info.message);
-    }
-
-    req.logIn(user, err => {
-      if (err) {
-        return res.status(500).json(err.message);
+      res.status(404).send("this email is not registered")
+    } else {
+      if (user.isValidPassword(password)) {
+        // give him a token
+        var token = jwt.sign({ userid: user.id, email: user.email, name: user.name }, process.env.jwtSecret, { expiresIn: maxAge });
+        res.cookie('jwt', token, { httpOnly: true, maxAge: maxAge * 1000 });
+        res.status(201).json({ user: user._id });
       }
-
-      res.json(user);
-    });
-  })(req, res, next);
+      else {
+        res.status(403).send('wrong cridentials')
+      }
+    }
+  })
+  .catch(err => {
+    const errors = handleErrors(err);
+    res.status(400).json({ errors });
+  })
 };
 
 exports.signout = (req, res) => {
-  res.clearCookie("next-connect.sid");
-  req.logout((err) => {
-    if (err) {
-      return res.status(500).json(err.message);
-    }
-    res.redirect("/signin");
-  });
+  res.cookie('jwt', '', { maxAge: 1 });
+  res.redirect('/');
 };
 
 exports.checkAuth = (req, res, next) => {
-  if (req.isAuthenticated()) {
-    return next();
-  } else{
-    res.redirect("/signin");
+  const token = req.cookies.jwt;
+  // check json web token exists & is verified
+  if (token) {
+    jwt.verify(token, process.env.jwtSecret, (err, decodedToken) => {
+      if (err) {
+        console.log(err.message);
+        return res.redirect('/signin');
+      } else {
+        console.log(decodedToken);
+        return next();
+      }
+    });
+  } else {
+    res.redirect('/signin');
   }
 };
+const requireAuth = (req, res, next) => {
+  const token = req.cookies.jwt;
+
+  // check json web token exists & is verified
+  if (token) {
+    jwt.verify(token, 'net ninja secret', (err, decodedToken) => {
+      if (err) {
+        console.log(err.message);
+        res.redirect('/login');
+      } else {
+        console.log(decodedToken);
+        next();
+      }
+    });
+  } else {
+    res.redirect('/login');
+  }
+};
+
+const checkUser = (req, res, next) => {
+  const token = req.cookies.jwt;
+  if (token) {
+    jwt.verify(token, 'net ninja secret', async (err, decodedToken) => {
+      if (err) {
+        res.locals.user = null;
+        next();
+      } else {
+        let user = await User.findById(decodedToken.id);
+        res.locals.user = user;
+        next();
+      }
+    });
+  } else {
+    res.locals.user = null;
+    next();
+  }
+};
+
+const maxAge = 24 * 60 * 60;
+// handle errors
+const handleErrors = (err) => {
+  console.log(err.message, err.code);
+  let errors = { email: '', password: '' };
+
+  // incorrect email
+  if (err.message === 'incorrect email') {
+    errors.email = 'That email is not registered';
+  }
+
+  // incorrect password
+  if (err.message === 'incorrect password') {
+    errors.password = 'That password is incorrect';
+  }
+
+  // duplicate email error
+  if (err.code === 11000) {
+    errors.email = 'that email is already registered';
+    return errors;
+  }
+
+  // validation errors
+  if (err.message.includes('user validation failed')) {
+    // console.log(err);
+    Object.values(err.errors).forEach(({ properties }) => {
+      // console.log(val);
+      // console.log(properties);
+      errors[properties.path] = properties.message;
+    });
+  }
+
+  return errors;
+}

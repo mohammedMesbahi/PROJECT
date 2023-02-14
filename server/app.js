@@ -3,11 +3,8 @@ var express = require('express');
 var path = require('path');
 var cookieParser = require('cookie-parser');
 var logger = require('morgan');
-const session = require("express-session");
 const mongoose = require("mongoose");
-const MongoStore = require("connect-mongo");
 const expressValidator = require("express-validator");
-const passport = require("passport");
 const compression = require("compression");
 // to clear the console after modifications
 process.stdout.write("\u001b[2J\u001b[0;0H");
@@ -51,34 +48,10 @@ app.use(express.static(path.join(__dirname, 'public')));
 /* Express Validator will validate form data sent to the backend */
 app.use(expressValidator());
 
-/* Apply our session configuration to express-session */
-app.use(session({
-  name: "next-connect.sid",
-  // secret used for using signed cookies w/ the session
-  secret: "SESSION_SECRET",
-  store: MongoStore.create({
-    mongoUrl: process.env.MONGO_URI,
-    ttl: 14 * 24 * 60 * 60 // = 14 days. Default
-  }),
-  // forces the session to be saved back to the store
-  resave: false,
-  // don't save unmodified sessions
-  saveUninitialized: false,
-  cookie: {
-    httpOnly: true,
-    maxAge: 1000 * 60 * 60 * 24 * 14 // expires in 14 days
-  }
-}));
-
 if (!dev) {
   sessionConfig.cookie.secure = true; // serve secure cookies in production environment
   app.set("trust proxy", 1); // trust first proxy
 }
-
-/* Add passport middleware to set passport up */
-app.use(passport.initialize());
-app.use(passport.session());
-require("./passport");
 
 app.use((req, res, next) => {
   /* custom middleware to put our user data (from passport) on the req.user so we can access it as such anywhere in our app */
