@@ -21,6 +21,39 @@ app.set('port', port);
 
 var server = http.createServer(app);
 
+/*  ********** integrating socketIo ✔🎉 ********
+ */
+
+const { Server } = require("socket.io");
+const io = new Server(server);
+
+io.on('connection', (socket) => {
+  io.engine.use((req, res, next) => {
+    app.use((req, res, next) => {
+      next(req,res,next);
+    })(req, res, next)
+  })
+  io.engine.use((req,res,next) => {
+    if(req.isAuthenticated()){
+      console.log("Authenticated")
+      next();
+    } else {
+      next(new Error("Authentication failed"));
+    }
+  })
+  socket.broadcast.emit('connection', 'a new connection was established');
+  socket.on('disconnect', (data) => {
+    socket.emit('disconnection', { message: 'someOne have disconnected' });
+  });
+  socket.on('chat-message', (data) => {
+    console.log(data);
+    io.send(data);
+  })
+
+});
+
+// *********************************************************** 🤞🤞 ********************************
+
 /**
  * Listen on provided port, on all network interfaces.
  */
