@@ -1,11 +1,32 @@
 <!DOCTYPE html>
 <html>
-  <head>
-    <title><%= title %></title>
-    <link rel='stylesheet' href='/stylesheets/style.css' />
-  </head>
-  <body>
-    <h1><%= title %></h1>
-    <p>Welcome to <%= title %></p>
-  </body>
+
+<head>
+  <title>
+    <%= title %>
+  </title>
+  <link rel='stylesheet' href='/stylesheets/style.css' />
+</head>
+
+<body>
+  <h1>
+    <%= title %>
+  </h1>
+  <p>Welcome to <%= title %>
+  </p>
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <script>
+    const socket = io('/chat');
+    socket.on("connect_error", err => {
+      console.log(err instanceof Error); // true
+      console.log(err.message); // not authorized
+      console.log(err.data); // { content: "Please retry later" }
+    });
+    socket.onAny((event, ...args) => {
+      console.log(`got - ${event} - event with the fallowing data`);
+      console.log(args);
+    });
+  </script>
+</body>
 </html>

@@ -7,7 +7,8 @@
 var app = require('../app');
 var debug = require('debug')('project:server');
 var http = require('http');
-
+var cookie = require('cookie');
+const { verifyToken } = require('../lib/authTools')
 /**
  * Get port from environment and store in Express.
  */
@@ -25,30 +26,35 @@ var server = http.createServer(app);
  */
 
 const { Server } = require("socket.io");
+const { default: axios } = require('axios');
 const io = new Server(server);
-
-io.on('connection', (socket) => {
-  io.engine.use((req, res, next) => {
-    app.use((req, res, next) => {
-      next(req,res,next);
-    })(req, res, next)
-  })
-  io.engine.use((req,res,next) => {
-    if(req.isAuthenticated()){
-      console.log("Authenticated")
-      next();
-    } else {
-      next(new Error("Authentication failed"));
-    }
-  })
-  socket.broadcast.emit('connection', 'a new connection was established');
-  socket.on('disconnect', (data) => {
-    socket.emit('disconnection', { message: 'someOne have disconnected' });
+let ConnectedUsers = [];
+// a middleware to authenticate a user
+io.of("/chat").use((socket, next) => {
+  var cookies = cookie.parse(socket.handshake.headers.cookie || '');
+  verifyToken(cookies.jwt)
+    .then(user => {
+      socket.user = user;
+      socket.id = user.userid;
+      return next();
+    })
+    .catch(err => {
+      var err = new Error("not authorized");
+      err.data = { content: "Please login" };
+      return next(err);
+    });
+});
+// on each connection update the list of connected users and send it to other users
+io.of('/chat').on('connection', (socket) => {
+  if(!ConnectedUsers.find((user) => user.id === socket.id)){
+    ConnectedUsers.push(socket.id);
+    io.of('/chat').emit('connection',{ConnectedUsers})
+  }
+  socket.on('disconnect', () => {
+    ConnectedUsers = ConnectedUsers.filter((user) => user!== socket.id);
+    io.of('/chat').emit('disconnetion',{ConnectedUsers})
   });
-  socket.on('chat-message', (data) => {
-    console.log(data);
-    io.send(data);
-  })
+
 
 });
 
