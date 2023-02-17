@@ -28,7 +28,7 @@ var server = http.createServer(app);
 const { Server } = require("socket.io");
 const { default: axios } = require('axios');
 const io = new Server(server);
-let ConnectedUsers = [];
+let connectedUsers = [];
 // a middleware to authenticate a user
 io.of("/chat").use((socket, next) => {
   var cookies = cookie.parse(socket.handshake.headers.cookie || '');
@@ -36,24 +36,28 @@ io.of("/chat").use((socket, next) => {
     .then(user => {
       socket.user = user;
       socket.id = user.userid;
-      return next();
+      next();
     })
     .catch(err => {
-      var err = new Error("not authorized");
-      err.data = { content: "Please login" };
-      return next(err);
+      next(err);
     });
 });
 // on each connection update the list of connected users and send it to other users
 io.of('/chat').on('connection', (socket) => {
-  if(!ConnectedUsers.find((user) => user.id === socket.id)){
-    ConnectedUsers.push(socket.id);
-    io.of('/chat').emit('connection',{ConnectedUsers})
+  if (!connectedUsers.find((user) => user == socket.id)) {
+    connectedUsers.push(socket.id);
+    io.of('/chat').emit('connection', { ConnectedUsers: connectedUsers })
   }
+  socket.on('message', (message) => {
+    message["sender"] = socket.id;
+    message["sendername"] = socket.user.name;
+    io.of('/chat').to(message.reciever).emit('message', message)
+  })
   socket.on('disconnect', () => {
-    ConnectedUsers = ConnectedUsers.filter((user) => user!== socket.id);
-    io.of('/chat').emit('disconnetion',{ConnectedUsers})
+    connectedUsers = connectedUsers.filter((user) => user !== socket.id);
+    io.of('/chat').emit('disconnetion', { ConnectedUsers: connectedUsers })
   });
+
 
 
 });
